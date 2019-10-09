@@ -14,20 +14,6 @@
             "type":"double",
             "units":""
         },
-        "a_half":{
-            "dimensions":"alevhalf",
-            "long_name":"vertical coordinate formula term: a(k)",
-            "out_name":"a",
-            "type":"double",
-            "units":""
-        },
-        "a_half_bnds":{
-            "dimensions":"alevhalf",
-            "long_name":"vertical coordinate formula term: a(k+1/2)",
-            "out_name":"a_bnds",
-            "type":"double",
-            "units":""
-        },
         "ap":{
             "dimensions":"alevel",
             "long_name":"vertical coordinate formula term: ap(k)",
@@ -42,20 +28,6 @@
             "type":"double",
             "units":"Pa"
         },
-        "ap_half":{
-            "dimensions":"alevhalf",
-            "long_name":"vertical coordinate formula term: ap(k)",
-            "out_name":"ap",
-            "type":"double",
-            "units":"Pa"
-        },
-        "ap_half_bnds":{
-            "dimensions":"alevel",
-            "long_name":"vertical coordinate formula term: ap(k+1/2)",
-            "out_name":"ap_bnds",
-            "type":"double",
-            "units":"Pa"
-        },
         "b":{
             "dimensions":"alevel",
             "long_name":"vertical coordinate formula term: b(k)",
@@ -63,50 +35,8 @@
             "type":"double",
             "units":""
         },
-        "b1":{
-            "dimensions":"alevel",
-            "long_name":"vertical coordinate formula term: b1(k)",
-            "out_name":"b1",
-            "type":"double",
-            "units":""
-        },
-        "b1_half":{
-            "dimensions":"alevhalf",
-            "long_name":"vertical coordinate formula term: b1(k)",
-            "out_name":"b1",
-            "type":"double",
-            "units":""
-        },
-        "b2":{
-            "dimensions":"alevel",
-            "long_name":"vertical coordinate formula term: b2(k)",
-            "out_name":"b2",
-            "type":"double",
-            "units":""
-        },
-        "b2_half":{
-            "dimensions":"alevhalf",
-            "long_name":"vertical coordinate formula term: b2(k)",
-            "out_name":"b2",
-            "type":"double",
-            "units":""
-        },
         "b_bnds":{
             "dimensions":"alevel",
-            "long_name":"vertical coordinate formula term: b(k+1/2)",
-            "out_name":"b_bnds",
-            "type":"double",
-            "units":""
-        },
-        "b_half":{
-            "dimensions":"alevhalf",
-            "long_name":"vertical coordinate formula term: b(k)",
-            "out_name":"b",
-            "type":"double",
-            "units":""
-        },
-        "b_half_bnds":{
-            "dimensions":"alevhalf",
             "long_name":"vertical coordinate formula term: b(k+1/2)",
             "out_name":"b_bnds",
             "type":"double",
@@ -172,7 +102,7 @@
             "dimensions":"",
             "long_name":"vertical coordinate formula term: reference pressure",
             "out_name":"p0",
-            "type":"double",
+            "type":"",
             "units":"Pa"
         },
         "ps":{
@@ -200,7 +130,7 @@
             "dimensions":"",
             "long_name":"pressure at top of model",
             "out_name":"ptop",
-            "type":"double",
+            "type":"",
             "units":"Pa"
         },
         "sigma":{
@@ -249,7 +179,7 @@
             "dimensions":"",
             "long_name":"height of top of model",
             "out_name":"ztop",
-            "type":"double",
+            "type":"",
             "units":"m"
         }
     }

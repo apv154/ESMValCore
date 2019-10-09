@@ -63,9 +63,8 @@ class CMORCheck():
         self._failerr = fail_on_error
         self._errors = list()
         self._warnings = list()
-        self._debug_messages = list()
         self._cmor_var = var_info
-        if not frequency:
+        if frequency is None:
             frequency = self._cmor_var.frequency
         self.frequency = frequency
         self.automatic_fixes = automatic_fixes
@@ -98,16 +97,13 @@ class CMORCheck():
         self._check_fill_value()
         self._check_dim_names()
         self._check_coords()
-        if self.frequency != 'fx':
-            self._check_time_coord()
+        self._check_time_coord()
         self._check_rank()
 
-        self.report_debug_messages(logger)
         self.report_warnings(logger)
         self.report_errors()
 
-        if self.frequency != 'fx':
-            self._add_auxiliar_time_coordinates()
+        self._add_auxiliar_time_coordinates()
         return self._cube
 
     def report_errors(self):
@@ -137,19 +133,6 @@ class CMORCheck():
             msg = 'There were warnings in variable {}:\n{}\n'.format(
                 self._cube.var_name, '\n '.join(self._warnings))
             logger.warning(msg)
-
-    def report_debug_messages(self, logger):
-        """Report detected debug messages to the given logger.
-
-        Parameters
-        ----------
-        logger
-
-        """
-        if self.has_debug_messages():
-            msg = 'There were metadata changes in variable {}:\n{}\n'.format(
-                self._cube.var_name, '\n '.join(self._debug_messages))
-            logger.debug(msg)
 
     def check_data(self, logger=None):
         """Check the cube data.
@@ -195,35 +178,9 @@ class CMORCheck():
         # Check standard_name
         if self._cmor_var.standard_name:
             if self._cube.standard_name != self._cmor_var.standard_name:
-                if self.automatic_fixes:
-                    self.report_warning(
-                        'Standard name for {} changed from {} to {}',
-                        self._cube.var_name,
-                        self._cube.standard_name,
-                        self._cmor_var.standard_name
-                    )
-                    self._cube.standard_name = self._cmor_var.standard_name
-                else:
-                    self.report_error(
-                        self._attr_msg, self._cube.var_name, 'standard_name',
-                        self._cmor_var.standard_name, self._cube.standard_name
-                    )
-        # Check long_name
-        if self._cmor_var.long_name:
-            if self._cube.long_name != self._cmor_var.long_name:
-                if self.automatic_fixes:
-                    self.report_warning(
-                        'Long name for {} changed from {} to {}',
-                        self._cube.var_name,
-                        self._cube.long_name,
-                        self._cmor_var.long_name
-                    )
-                    self._cube.long_name = self._cmor_var.long_name
-                else:
-                    self.report_error(
-                        self._attr_msg, self._cube.var_name, 'long_name',
-                        self._cmor_var.long_name, self._cube.long_name
-                    )
+                self.report_error(
+                    self._attr_msg, self._cube.var_name, 'standard_name',
+                    self._cmor_var.standard_name, self._cube.standard_name)
 
         # Check units
         if (self.automatic_fixes and self._cube.attributes.get(
@@ -300,28 +257,12 @@ class CMORCheck():
                 except iris.exceptions.CoordinateNotFoundError:
                     try:
                         coord = self._cube.coord(coordinate.standard_name)
-                        if self._cmor_var.table_type in 'CMIP6' and \
-                           coord.ndim > 1 and \
-                           coord.standard_name in ['latitude', 'longitude']:
-                            self.report_debug_message(
-                                'Multidimensional {0} coordinate is not set '
-                                'in CMOR standard. ESMValTool will change '
-                                'the original value of  {1} to {2} to match '
-                                'the one-dimensional case.',
-                                coordinate.standard_name,
-                                coord.var_name,
-                                coordinate.out_name,
-                            )
-                            coord.var_name = coordinate.out_name
-                        else:
-                            self.report_error(
-                                'Coordinate {0} has var name {1}'
-                                'Coordinate {0} has var name {1} '
-                                'instead of {2}',
-                                coordinate.name,
-                                coord.var_name,
-                                coordinate.out_name,
-                            )
+                        self.report_error(
+                            'Coordinate {0} has var name {1} instead of {2}',
+                            coordinate.name,
+                            coord.var_name,
+                            coordinate.out_name,
+                        )
                     except iris.exceptions.CoordinateNotFoundError:
                         self.report_error(self._does_msg, coordinate.name,
                                           'exist')
@@ -378,7 +319,8 @@ class CMORCheck():
                     self.report_error(self._attr_msg, var_name, 'units',
                                       cmor.units, coord.units)
         self._check_coord_values(cmor, coord, var_name)
-        self._check_coord_monotonicity_and_direction(cmor, coord, var_name)
+        if not self.automatic_fixes:
+            self._check_coord_monotonicity_and_direction(cmor, coord, var_name)
 
     def _check_coord_monotonicity_and_direction(self, cmor, coord, var_name):
         """Check monotonicity and direction of coordinate."""
@@ -451,54 +393,25 @@ class CMORCheck():
     def _check_time_coord(self):
         """Check time coordinate."""
         try:
-            coord = self._cube.coord('time', dim_coords=True)
+            coord = self._cube.coord('time', dim_coords=True)  # , axis='T')
+            var_name = coord.var_name
         except iris.exceptions.CoordinateNotFoundError:
-            try:
-                coord = self._cube.coord('time')
-            except iris.exceptions.CoordinateNotFoundError:
-                return
-
-        var_name = coord.var_name
-        if not coord.is_monotonic():
-            self.report_error(
-                'Time coordinate for var {} is not monotonic', var_name
-            )
+            return
 
         if not coord.units.is_time_reference():
             self.report_error(self._does_msg, var_name,
                               'have time reference units')
         else:
-            old_units = coord.units
             coord.convert_units(
                 cf_units.Unit(
-                    'days since 1850-1-1 00:00:00',
+                    'days since 1950-1-1 00:00:00',
                     calendar=coord.units.calendar))
             simplified_cal = self._simplify_calendar(coord.units.calendar)
             coord.units = cf_units.Unit(coord.units.origin, simplified_cal)
 
-            attrs = self._cube.attributes
-            branch_child = 'branch_time_in_child'
-            if branch_child in attrs:
-                attrs[branch_child] = old_units.convert(attrs[branch_child],
-                                                        coord.units)
-
-            parent_time = 'parent_time_units'
-            if parent_time in attrs:
-                parent_units = cf_units.Unit(attrs[parent_time],
-                                             simplified_cal)
-                attrs[parent_time] = 'days since 1850-1-1 00:00:00'
-
-                branch_parent = 'branch_time_in_parent'
-                if branch_parent in attrs:
-                    attrs[branch_parent] = parent_units.convert(
-                        attrs[branch_parent], coord.units)
-
         tol = 0.001
         intervals = {'dec': (3600, 3660), 'day': (1, 1)}
-        freq = self.frequency
-        if freq.lower().endswith('pt'):
-            freq = freq[:-2]
-        if freq == 'mon':
+        if self.frequency == 'mon':
             for i in range(len(coord.points) - 1):
                 first = coord.cell(i).point
                 second = coord.cell(i + 1).point
@@ -510,23 +423,23 @@ class CMORCheck():
                 if second_month != second.month or \
                    second_year != second.year:
                     msg = '{}: Frequency {} does not match input data'
-                    self.report_error(msg, var_name, freq)
+                    self.report_error(msg, var_name, self.frequency)
                     break
-        elif freq == 'yr':
+        elif self.frequency == 'yr':
             for i in range(len(coord.points) - 1):
                 first = coord.cell(i).point
                 second = coord.cell(i + 1).point
                 second_month = first.month + 1
                 if first.year + 1 != second.year:
                     msg = '{}: Frequency {} does not match input data'
-                    self.report_error(msg, var_name, freq)
+                    self.report_error(msg, var_name, self.frequency)
                     break
         else:
-            if freq in intervals:
-                interval = intervals[freq]
+            if self.frequency in intervals:
+                interval = intervals[self.frequency]
                 target_interval = (interval[0] - tol, interval[1] + tol)
-            elif freq.endswith('hr'):
-                frequency = freq[:-2]
+            elif self.frequency.endswith('hr'):
+                frequency = self.frequency[:-2]
                 if frequency == 'sub':
                     frequency = 1.0 / 24
                     target_interval = (-tol, frequency + tol)
@@ -535,14 +448,14 @@ class CMORCheck():
                     target_interval = (frequency - tol, frequency + tol)
             else:
                 msg = '{}: Frequency {} not supported by checker'
-                self.report_error(msg, var_name, freq)
+                self.report_error(msg, var_name, self.frequency)
                 return
             for i in range(len(coord.points) - 1):
                 interval = coord.points[i + 1] - coord.points[i]
                 if (interval < target_interval[0]
                         or interval > target_interval[1]):
                     msg = '{}: Frequency {} does not match input data'
-                    self.report_error(msg, var_name, freq)
+                    self.report_error(msg, var_name, self.frequency)
                     break
 
     @staticmethod
@@ -575,17 +488,6 @@ class CMORCheck():
 
         """
         return len(self._warnings) > 0
-
-    def has_debug_messages(self):
-        """Check if there are reported debug messages.
-
-        Returns
-        -------
-        bool:
-            True if there are pending debug messages, False otherwise.
-
-        """
-        return len(self._debug_messages) > 0
 
     def report_error(self, message, *args):
         """Report an error.
@@ -625,20 +527,6 @@ class CMORCheck():
             print('WARNING: {0}'.format(msg))
         else:
             self._warnings.append(msg)
-
-    def report_debug_message(self, message, *args):
-        """Report a debug message.
-
-        Parameters
-        ----------
-        message: str: unicode
-            Message for the debug logger.
-        *args:
-            arguments to format the message string
-
-        """
-        msg = message.format(*args)
-        self._debug_messages.append(msg)
 
     def _add_auxiliar_time_coordinates(self):
         coords = [coord.name() for coord in self._cube.aux_coords]

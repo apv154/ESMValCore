@@ -5,11 +5,10 @@ import os
 import shutil
 from collections import OrderedDict
 from itertools import groupby
-from warnings import catch_warnings, filterwarnings
 
+import numpy as np
 import iris
 import iris.exceptions
-import numpy as np
 import yaml
 
 from .._task import write_ncl_settings
@@ -54,14 +53,7 @@ def concatenate_callback(raw_cube, field, _):
 def load(file, callback=None):
     """Load iris cubes from files."""
     logger.debug("Loading:\n%s", file)
-    with catch_warnings():
-        filterwarnings(
-            'ignore',
-            message="Missing CF-netCDF measure variable .*",
-            category=UserWarning,
-            module='iris',
-        )
-        raw_cubes = iris.load_raw(file, callback=callback)
+    raw_cubes = iris.load_raw(file, callback=callback)
     if not raw_cubes:
         raise Exception('Can not load cubes from {0}'.format(file))
     for cube in raw_cubes:
@@ -78,8 +70,8 @@ def _fix_cube_attributes(cubes):
                 attributes[attr] = val
             else:
                 if not np.array_equal(val, attributes[attr]):
-                    attributes[attr] = '{};{}'.format(str(attributes[attr]),
-                                                      str(val))
+                    attributes[attr] = '{};{}'.format(
+                        str(attributes[attr]), str(val))
     for cube in cubes:
         cube.attributes = attributes
 
@@ -87,20 +79,15 @@ def _fix_cube_attributes(cubes):
 def concatenate(cubes):
     """Concatenate all cubes after fixing metadata."""
     _fix_cube_attributes(cubes)
-    concatenated = iris.cube.CubeList(cubes).concatenate()
-    if len(concatenated) == 1:
-        return concatenated[0]
-    logger.error('Can not concatenate cubes into a single one.')
-    logger.error('Resulting cubes:')
-    for cube in concatenated:
-        logger.error(cube)
-        try:
-            time = cube.coord('time')
-        except iris.exceptions.CoordinateNotFoundError:
-            pass
-        else:
-            logger.error('From %s to %s', time.cell(0), time.cell(-1))
-    raise ValueError('Can not concatenate cubes.')
+    try:
+        cube = iris.cube.CubeList(cubes).concatenate_cube()
+        return cube
+    except iris.exceptions.ConcatenateError as ex:
+        logger.error('Can not concatenate cubes: %s', ex)
+        logger.error('Cubes:')
+        for cube in cubes:
+            logger.error(cube)
+        raise ex
 
 
 def save(cubes, filename, optimize_access='', compress=False, **kwargs):
@@ -200,6 +187,7 @@ def cleanup(files, remove=None):
 
 def _ordered_safe_dump(data, stream):
     """Write data containing OrderedDicts to yaml file."""
+
     class _OrderedDumper(yaml.SafeDumper):
         pass
 
@@ -244,6 +232,11 @@ def _write_ncl_metadata(output_dir, metadata):
     """Write NCL metadata files to output_dir."""
     variables = [copy.deepcopy(v) for v in metadata.values()]
 
+    for variable in variables:
+        fx_files = variable.pop('fx_files', {})
+        for fx_type in fx_files:
+            variable[fx_type] = fx_files[fx_type]
+
     info = {'input_file_info': variables}
 
     # Split input_file_info into dataset and variable properties
@@ -256,8 +249,8 @@ def _write_ncl_metadata(output_dir, metadata):
         dataset_info = {}
         info['dataset_info'].append(dataset_info)
         for key in variable:
-            dataset_specific = any(variable[key] != var.get(key, object())
-                                   for var in variables)
+            dataset_specific = any(
+                variable[key] != var.get(key, object()) for var in variables)
             if ((dataset_specific or key in DATASET_KEYS)
                     and key not in VARIABLE_KEYS):
                 dataset_info[key] = variable[key]
